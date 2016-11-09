@@ -337,6 +337,7 @@ exe check-streams-on-exit : framework-ts/check-streams-on-exit.cpp ;
 
 exe dataset-master-test-suite-accessible-test : test-organization-ts/dataset-master-test-suite-accessible-test.cpp
                                               : $(requirements_datasets) ;
+exe smoke-invalid-handling-log-global-fixture : framework-ts/log-invalid-xml-test.cpp ;
 
 alias "smoke-ts"
 :
@@ -401,6 +402,10 @@ alias "smoke-ts"
 [ run-fail smoke-ts-included-3 : --result_code=1 --run_test=case2 -t some_suite : : : cla-runtest-repeated-mixed-long-fail3 ]
 [ run smoke-ts-included-3 : --result_code=0 --run_test=case2 -t some_suite : : : cla-runtest-repeated-mixed-long-fail4 ]
 
+
+[ run smoke-invalid-handling-log-global-fixture : --log_format=XML --log_level=all : : : log-global-fixture-XML ]
+[ run smoke-invalid-handling-log-global-fixture : --log_format=JUNIT --log_level=all : : : log-global-fixture-JUNIT ]
+# : $(requirements_datasets)
 ;
 
 #_________________________________________________________________________________________________#
