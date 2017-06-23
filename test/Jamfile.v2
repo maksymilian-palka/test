@@ -175,6 +175,7 @@ test-suite "writing-test-ts"
   [ boost.test-self-test run : writing-test-ts : test-fixture-detect-setup-teardown ]
   [ boost.test-self-test run : writing-test-ts : test-fixture-detect-setup-teardown-cpp11 : : : : : : [ requires cxx11_decltype cxx11_trailing_result_types ] ]
   [ boost.test-self-test run : writing-test-ts : test-with-precondition : : : : : : [ requires cxx11_auto_declarations cxx11_lambdas ] ]
+  [ boost.test-self-test run : writing-test-ts : bind-no-placeholder-test : included ]
 ;
 
 #_________________________________________________________________________________________________#
