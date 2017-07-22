@@ -123,6 +123,6 @@ alias minimal ;
 
 alias included ;
 
-boost-install boost_prg_exec_monitor
-              boost_test_exec_monitor
-              boost_unit_test_framework ;
+boost-install boost_unit_test_framework
+              boost_prg_exec_monitor
+              boost_test_exec_monitor ;
