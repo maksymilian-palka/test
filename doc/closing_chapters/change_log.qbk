@@ -26,7 +26,7 @@
   for more information.
 
 [h5 Breaking changes]
-
+* Removed long time deprecated headers
 * Boost.Test `minimal.hpp` is now showing a deprecation warning. `minimal.hpp` has been
   deprecated for a long time already, and will be removed in the near future. Please
   switch to eg. the header only variable of Boost.Test. Tests using `minimal.hpp` can
@@ -86,8 +86,6 @@
   and [link boost_test.usage_variants here]).
 * It is now possible to manually add a test case by specifying its name, with __BOOST_TEST_CASE_NAME__
 * Better logging of messages in `boost::exception`
-
-[h5 Breaking changes]
 
 [h5 Bugfixes and feature requests]
 
