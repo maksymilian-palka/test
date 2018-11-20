@@ -401,6 +401,21 @@ alias "smoke-ts"
 [ run smoke-ts-included-3 : -c no --run_test=case2 -t some_suite : : : cla-runtest-repeated-mixed-long-no-fail3 ]
 [ run-fail smoke-ts-included-3 : --result_code=1 --run_test=case2 -t some_suite : : : cla-runtest-repeated-mixed-long-fail3 ]
 [ run smoke-ts-included-3 : --result_code=0 --run_test=case2 -t some_suite : : : cla-runtest-repeated-mixed-long-fail4 ]
+;
+
+exe custom-command-line-binary-1 : ../doc/examples/runtime-configuration_1.run-fail.cpp ;
+exe custom-command-line-binary-2 : ../doc/examples/runtime-configuration_2.run-fail.cpp
+                                 : $(requirements_boost_test_full_support) ;
+
+alias "custom-command-line-ts"
+:
+# custom command line interface tests
+[ run custom-command-line-binary-1 : -- --specific-param \"'additional value with quotes'\" : : : cla-specific-api1-test-1-1 ]
+[ run custom-command-line-binary-1 : --log_level=all --no_color -- --specific-param \"'additional value with quotes'\" : : : cla-specific-api1-test-1-2 ]
+
+[ run-fail custom-command-line-binary-2 : -- --random-string \"mock_device\" : : $(requirements_boost_test_full_support) : cla-specific-api1-test-2-0 ]
+[ run custom-command-line-binary-2 : -- --device-name \"mock_device\" : : $(requirements_boost_test_full_support) : cla-specific-api1-test-2-1 ]
+[ run custom-command-line-binary-2 : --log_level=all --no_color -- --device-name \"mock_device\" : : $(requirements_boost_test_full_support) : cla-specific-api1-test-2-2 ]
 
 ;
 

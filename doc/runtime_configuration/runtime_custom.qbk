@@ -1,0 +1,64 @@
+[/
+ / Copyright (c) 2003 Boost.Test contributors
+ /
+ / Distributed under the Boost Software License, Version 1.0. (See accompanying
+ / file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+ /]
+
+[section Custom runtime parameters]
+
+The __UTF__ supports custom runtime argument passing. The general format for passing custom arguments
+is the following:
+
+``
+<boost_test_module> [<boost_test_arg1>...] [-- [<custom_parameter1>...]
+``
+
+This means that everything that is passed after "`--`" is considered as a custom parameter and will not be intercepted nor interpreted
+by the __UTF__. This avoids any troubleshooting between the __UTF__ parameters and the custom ones.
+
+[h4 Consuming custom arguments from a test case]
+The [link boost_test.tests_organization.test_suite.master_test_suite master test suite] collects the custom arguments
+passed to the test module in the following way:
+
+* `argv[0]`, usually set by the operating system as the executable name, remains unchanged
+* any argument interpreted by the test module is removed from `argv`
+* the empty token `--` is removed as well
+* any additional argument passed after the empty token is reported in `argv` starting at index `1`
+
+[bt_example runtime-configuration_1..Basic custom command line..run-fail]
+
+[h4 Consuming custom arguments from a global fixture]
+Another possibility for consuming the custom command line arguments would within a
+[link boost_test.tests_organization.fixtures.global global fixture]. This is especially useful
+when the instanciates global objects used in the test cases.
+
+The usage is the same as for test cases. The following example runs the test module twice with
+different arguments, and illustrate the feature.
+
+[tip The global fixture can check for the correctness of the custom arguments and may abort the full run
+ of the test module.]
+
+[bt_example runtime-configuration_2..Using jointly with global fixtures..run-fail]
+
+[h4 Creating or parametrizing tests cases based on command line arguments]
+
+[h5 Initialization function]
+
+
+[h5 Data-driven test cases]
+
+
+
+[h4 Writing the logic for custom arguments handling]
+Several options
+
+* init
+* fixture
+* test based
+
+[h4 Handling errors]
+Raising exceptions
+Return code??
+
+[endsect] [/ Custom runtime parameters]
