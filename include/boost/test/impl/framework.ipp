@@ -48,7 +48,7 @@
 #include <boost/test/detail/throw_exception.hpp>
 
 // Boost
-#include <boost/timer.hpp>
+#include <boost/test/utils/timer.hpp>
 #include <boost/bind.hpp>
 
 // STL
@@ -664,6 +664,7 @@ public:
     };
 
     // Executes the test tree with the root at specified test unit
+    // timeout is in seconds.
     execution_result execute_test_tree( test_unit_id tu_id,
                                         unsigned timeout = 0,
                                         random_generator_helper const * const p_random_generator = 0)
@@ -716,12 +717,13 @@ public:
             }
         }
 
-        // This is the time we are going to spend executing the test unit
+        // This is the time we are going to spend executing the test unit (in microseconds
+        // as expected by test_observer::test_unit_finish)
         unsigned long elapsed = 0;
 
         if( result == unit_test_monitor_t::test_ok ) {
             // 40. We are going to time the execution
-            boost::timer tu_timer;
+            boost::unit_test::timer::timer tu_timer;
 
             // we pass the random generator
             const random_generator_helper& rand_gen = p_random_generator ? *p_random_generator : random_generator_helper();
@@ -733,7 +735,8 @@ public:
                     typedef std::pair<counter_t,test_unit_id> value_type;
 
                     BOOST_TEST_FOREACH( value_type, chld, ts.m_ranked_children ) {
-                        unsigned chld_timeout = child_timeout( timeout, tu_timer.elapsed() );
+                        // tu_timer.elapsed() returns nanosec, child_timeout expects seconds
+                        unsigned chld_timeout = child_timeout( timeout, second_wall_time(tu_timer.elapsed()) );
 
                         result = (std::min)( result, execute_test_tree( chld.second, chld_timeout, &rand_gen ) );
 
@@ -765,7 +768,7 @@ public:
 #endif
 
                         BOOST_TEST_FOREACH( test_unit_id, chld, children_with_the_same_rank ) {
-                            unsigned chld_timeout = child_timeout( timeout, tu_timer.elapsed() );
+                            unsigned chld_timeout = child_timeout( timeout, second_wall_time(tu_timer.elapsed()) );
 
                             result = (std::min)( result, execute_test_tree( chld, chld_timeout, &rand_gen ) );
 
@@ -775,7 +778,7 @@ public:
                     }
                 }
 
-                elapsed = static_cast<unsigned long>( tu_timer.elapsed() * 1e6 );
+                elapsed = static_cast<unsigned long>( microsecond_wall_time(tu_timer.elapsed()) ); // nano to micro
             }
             else { // TUT_CASE
                 test_case const& tc = static_cast<test_case const&>( tu );
@@ -788,7 +791,7 @@ public:
 
                 // execute the test case body
                 result = unit_test_monitor.execute_and_translate( tc.p_test_func, timeout );
-                elapsed = static_cast<unsigned long>( tu_timer.elapsed() * 1e6 );
+                elapsed = static_cast<unsigned long>( microsecond_wall_time(tu_timer.elapsed()) ); // nano to micro
 
                 // cleanup leftover context
                 m_context.clear();
