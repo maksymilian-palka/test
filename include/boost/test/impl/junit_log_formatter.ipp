@@ -423,7 +423,7 @@ public:
               << " tests"     << utils::attr_value() << tr.p_test_cases_passed
               << " skipped"   << utils::attr_value() << tr.p_test_cases_skipped
               << " errors"    << utils::attr_value() << tr.p_test_cases_aborted
-              << " failures"  << utils::attr_value() << tr.p_test_cases_failed
+              << " failures"  << utils::attr_value() << tr.p_test_cases_failed-tr.p_test_cases_aborted // failed is not aborted in the Junit sense
               << " id"        << utils::attr_value() << m_id++
               << " name"      << utils::attr_value() << tu_name_normalize(ts.p_name)
               << " time"      << utils::attr_value() << (tr.p_duration_microseconds * 1E-6)
