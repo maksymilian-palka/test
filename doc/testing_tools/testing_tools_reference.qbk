@@ -86,11 +86,16 @@ See [link boost_test.testing_tools.expected_failures here] for more details.
 [section:decorator_timeout timeout (decorator)]
 
 ``
-timeout(unsigned seconds);
+timeout(unsigned int seconds);
 ``
 
-Specifies a time-out for a *test-case*, above which the test-case is forced to stop and reported as failing.
+Specifies a time-out for a *test-case*. If the test lasts longer than the timeout, the
+test is flagged as failed. On some systems, the test-case is forced to stop.
 See [link boost_test.testing_tools.timeout here] for more details.
+
+[note The macro
+  `BOOST_SIGACTION_BASED_SIGNAL_HANDLING` is defined
+  if Boost.Test is able to force the test-case to stop.]
 
 [endsect] [/ section timeout]
 

@@ -45,6 +45,7 @@ public:
     static bool is_critical_error( error_level e ) { return e <= fatal_error; }
 
     // monitor method
+    // timeout is expressed in seconds
     error_level execute_and_translate( boost::function<void ()> const& func, unsigned timeout = 0 );
 
     // singleton pattern

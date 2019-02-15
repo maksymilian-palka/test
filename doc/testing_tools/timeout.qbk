@@ -8,15 +8,18 @@
 
 [section:timeout Time-out for test cases]
 
-The __UTF__ provides the decorator __decorator_timeout__ that specifies a time-out for a specific *test case*, 
-The argument time (in seconds) sets the maximum allowed duration of a test case. If this time is 
-exceeded the test case is forced to stop and is reported as failure.
+The __UTF__ provides the decorator __decorator_timeout__ that specifies a time-out for a specific *test case*,
+The argument time (in seconds) sets the maximum allowed duration of a test case. If this time is
+exceeded the test case is reported as failed. On some systems, the __UTF__ is able to force the test-case
+to stop.
 
 [bt_example decorator_11..decorator timeout..run-fail]
 
 [note Applied at test suite level, this decorator has no effect.]
 
-[caution Decorator `timeout` has no effect on Windows build. This feature is not implemented on Windows yet.]
-
+[note The macro
+  `BOOST_SIGACTION_BASED_SIGNAL_HANDLING` is defined
+  if Boost.Test is able to force the test-case to stop. This feature is for instance not supported on Windows.
+  The __UTF__ will still be able to report the test-case as failed (once the test-case finishes).]
 
 [endsect]
