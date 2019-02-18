@@ -791,7 +791,7 @@ public:
 
                 // execute the test case body
                 result = unit_test_monitor.execute_and_translate( tc.p_test_func, timeout );
-                elapsed_microseconds = static_cast<unsigned long>( microsecond_wall_time(tu_timer.elapsed()) ); // nano to micro
+                elapsed_microseconds = static_cast<unsigned long>( microsecond_wall_time(tu_timer.elapsed()) );
 
                 // cleanup leftover context
                 m_context.clear();
