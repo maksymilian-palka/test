@@ -56,7 +56,8 @@ test_results::passed() const
             p_test_cases_failed == 0                    &&
             p_assertions_failed <= p_expected_failures  &&
             // p_test_cases_skipped == 0                   &&
-            !p_aborted;
+            !p_timedout                                 &&
+            !aborted();
 }
 
 //____________________________________________________________________________//
@@ -81,7 +82,7 @@ int
 test_results::result_code() const
 {
     return passed() ? exit_success
-           : ( (p_assertions_failed > p_expected_failures || p_skipped )
+           : ( (p_assertions_failed > p_expected_failures || p_skipped || p_test_cases_timedout )
                     ? exit_test_failure
                     : exit_exception_failure );
 }
@@ -99,6 +100,7 @@ test_results::operator+=( test_results const& tr )
     p_test_cases_failed.value   += tr.p_test_cases_failed;
     p_test_cases_skipped.value  += tr.p_test_cases_skipped;
     p_test_cases_aborted.value  += tr.p_test_cases_aborted;
+    p_test_cases_timedout.value += tr.p_test_cases_timedout;
     p_duration_microseconds.value += tr.p_duration_microseconds;
 }
 
@@ -116,9 +118,11 @@ test_results::clear()
     p_test_cases_failed.value   = 0;
     p_test_cases_skipped.value  = 0;
     p_test_cases_aborted.value  = 0;
+    p_test_cases_timedout.value = 0;
     p_duration_microseconds.value= 0;
     p_aborted.value             = false;
     p_skipped.value             = false;
+    p_timedout.value            = false;
 }
 
 //____________________________________________________________________________//
@@ -179,6 +183,8 @@ public:
             else
                 m_tr.p_test_cases_passed.value++;
         }
+        else if( tr.p_timedout )
+            m_tr.p_test_cases_timedout.value++;
         else if( tr.p_skipped )
             m_tr.p_test_cases_skipped.value++;
         else {
@@ -216,6 +222,11 @@ results_collector_t::test_unit_finish( test_unit const& tu, unsigned long elapse
     else {
         test_results & tr = s_rc_impl().m_results_store[tu.p_id];
         tr.p_duration_microseconds.value = elapsed_in_microseconds;
+
+        if( tu.p_timeout && elapsed_in_microseconds >= (tu.p_timeout.value*1E6)) {
+            tr.p_timedout.value = true;
+            BOOST_TEST_FRAMEWORK_MESSAGE( "Test case " << tu.full_name() << " last longer than expected: flagging as timed-out" );
+        }
 
         bool num_failures_match = tr.p_aborted || tr.p_assertions_failed >= tr.p_expected_failures;
         if( !num_failures_match )

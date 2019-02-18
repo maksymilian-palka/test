@@ -778,7 +778,7 @@ public:
                     }
                 }
 
-                elapsed_microseconds = static_cast<unsigned long>( microsecond_wall_time(tu_timer.elapsed()) ); // nano to micro
+                elapsed_microseconds = static_cast<unsigned long>( microsecond_wall_time(tu_timer.elapsed()) );
             }
             else { // TUT_CASE
                 test_case const& tc = static_cast<test_case const&>( tu );
@@ -798,7 +798,7 @@ public:
 
                 // we check for timeouts
                 if(result == unit_test_monitor_t::test_ok) {
-                    if(timeout != 0 && elapsed_microseconds > ((timeout+1)*1E6)) {
+                    if(timeout != 0 && elapsed_microseconds >= ((timeout+1)*1E6)) {
                         result = unit_test_monitor_t::os_timeout;
                     }
                 }
