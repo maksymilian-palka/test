@@ -719,7 +719,7 @@ public:
 
         // This is the time we are going to spend executing the test unit (in microseconds
         // as expected by test_observer::test_unit_finish)
-        unsigned long elapsed = 0;
+        unsigned long elapsed_microseconds = 0;
 
         if( result == unit_test_monitor_t::test_ok ) {
             // 40. We are going to time the execution
@@ -778,7 +778,7 @@ public:
                     }
                 }
 
-                elapsed = static_cast<unsigned long>( microsecond_wall_time(tu_timer.elapsed()) ); // nano to micro
+                elapsed_microseconds = static_cast<unsigned long>( microsecond_wall_time(tu_timer.elapsed()) ); // nano to micro
             }
             else { // TUT_CASE
                 test_case const& tc = static_cast<test_case const&>( tu );
@@ -791,10 +791,17 @@ public:
 
                 // execute the test case body
                 result = unit_test_monitor.execute_and_translate( tc.p_test_func, timeout );
-                elapsed = static_cast<unsigned long>( microsecond_wall_time(tu_timer.elapsed()) ); // nano to micro
+                elapsed_microseconds = static_cast<unsigned long>( microsecond_wall_time(tu_timer.elapsed()) ); // nano to micro
 
                 // cleanup leftover context
                 m_context.clear();
+
+                // we check for timeouts
+                if(result == unit_test_monitor_t::test_ok) {
+                    if(timeout != 0 && elapsed_microseconds > ((timeout+1)*1E6)) {
+                        result = unit_test_monitor_t::os_timeout;
+                    }
+                }
 
                 // restore state (scope exit) and abort if necessary
             }
@@ -820,7 +827,7 @@ public:
 
         // notify all observers about completion
         BOOST_TEST_REVERSE_FOREACH( test_observer*, to, m_observers )
-            to->test_unit_finish( tu, elapsed );
+            to->test_unit_finish( tu, elapsed_microseconds );
 
         return result;
     }
