@@ -225,7 +225,7 @@ results_collector_t::test_unit_finish( test_unit const& tu, unsigned long elapse
 
         if( tu.p_timeout && elapsed_in_microseconds >= (tu.p_timeout.value*1E6)) {
             tr.p_timedout.value = true;
-            BOOST_TEST_FRAMEWORK_MESSAGE( "Test case " << tu.full_name() << " last longer than expected: flagging as timed-out" );
+            BOOST_TEST_FRAMEWORK_MESSAGE( "Test case " << tu.full_name() << " lasted longer than expected: flagging as 'timed-out'" );
         }
 
         bool num_failures_match = tr.p_aborted || tr.p_assertions_failed >= tr.p_expected_failures;
