@@ -100,6 +100,10 @@ using std::va_list;
 #    define BOOST_TEST_CRT_SET_HOOK(H)  (void*)(H)
 #  endif
 
+#  if defined(_MSC_VER) && (_WIN32_WINNT >= 0x0501) /* WinXP */
+#    define BOOST_TEST_WAITABLE_TIMERS
+#  endif
+
 #  if (!BOOST_WORKAROUND(_MSC_VER,  >= 1400 ) && \
       !defined(BOOST_COMO)) || defined(UNDER_CE)
 
@@ -897,8 +901,10 @@ public:
     , m_se_id( 0 )
     , m_fault_address( 0 )
     , m_dir( false )
+    , m_timeout( false )
     {}
 
+    void                set_timed_out();
     void                report() const;
     int                 operator()( unsigned id, _EXCEPTION_POINTERS* exps );
 
@@ -909,6 +915,7 @@ private:
     unsigned            m_se_id;
     void*               m_fault_address;
     bool                m_dir;
+    bool                m_timeout;
 };
 
 //____________________________________________________________________________//
@@ -920,6 +927,14 @@ seh_catch_preventer( unsigned /* id */, _EXCEPTION_POINTERS* /* exps */ )
     throw;
 }
 #endif
+
+//____________________________________________________________________________//
+
+void
+system_signal_exception::set_timed_out()
+{
+    m_timeout = true;
+}
 
 //____________________________________________________________________________//
 
@@ -1074,7 +1089,12 @@ system_signal_exception::report() const
         break;
 
     default:
-        detail::report_error( execution_exception::system_error, "unrecognized exception. Id: 0x%08lx", m_se_id );
+        if( m_timeout ) {
+            detail::report_error(execution_exception::timeout_error, "timeout while executing function");
+        }
+        else {
+            detail::report_error( execution_exception::system_error, "unrecognized exception. Id: 0x%08lx", m_se_id );
+        }
         break;
     }
 }
@@ -1133,6 +1153,31 @@ execution_monitor::catch_signals( boost::function<int ()> const& F )
 #endif
     }
 
+#if defined(BOOST_TEST_WAITABLE_TIMERS)
+    HANDLE htimer = INVALID_HANDLE_VALUE;
+    BOOL bTimerSuccess = FALSE;
+
+    if( p_timeout ) {
+        htimer = ::CreateWaitableTimer(
+            NULL,
+            TRUE,
+            TEXT("Boost.Test timer"));
+
+        __int64 qwDueTime = - static_cast<signed int>(p_timeout) * 10000000;
+        LARGE_INTEGER liDueTime;
+        liDueTime.LowPart = (DWORD)(qwDueTime & 0xFFFFFFFF);
+        liDueTime.HighPart = (LONG)(qwDueTime >> 32);
+
+        bTimerSuccess = ::SetWaitableTimer(
+            htimer,
+            &liDueTime,
+            0,
+            0,
+            0,
+            FALSE);           // Do not restore a suspended system
+    }
+#endif 
+
     detail::system_signal_exception SSE( this );
 
     int ret_val = 0;
@@ -1146,8 +1191,26 @@ execution_monitor::catch_signals( boost::function<int ()> const& F )
         __except( SSE( GetExceptionCode(), GetExceptionInformation() ) ) {
             throw SSE;
         }
+
+        // we check for time outs: we do not have any signaling facility on Win32
+        // however, we signal a timeout as a hard error as for the other operating systems
+        // and throw the signal error handler
+        if( bTimerSuccess && htimer != INVALID_HANDLE_VALUE) {
+            if (::WaitForSingleObject(htimer, 0) == WAIT_OBJECT_0) {
+                SSE.set_timed_out();
+                throw SSE;
+            }
+        }
+
     }
     __finally {
+
+#if defined(BOOST_TEST_WAITABLE_TIMERS)
+        if( htimer != INVALID_HANDLE_VALUE ) {
+            ::CloseHandle(htimer);
+        }
+#endif
+
         if( l_catch_system_errors ) {
             BOOST_TEST_CRT_SET_HOOK( old_crt_hook );
 
@@ -1250,15 +1313,8 @@ execution_monitor::execute( boost::function<int ()> const& F )
 #endif
 
     CATCH_AND_REPORT_STD_EXCEPTION( std::bad_alloc )
-
-#if BOOST_WORKAROUND(__BORLANDC__, <= 0x0551)
     CATCH_AND_REPORT_STD_EXCEPTION( std::bad_cast )
     CATCH_AND_REPORT_STD_EXCEPTION( std::bad_typeid )
-#else
-    CATCH_AND_REPORT_STD_EXCEPTION( std::bad_cast )
-    CATCH_AND_REPORT_STD_EXCEPTION( std::bad_typeid )
-#endif
-
     CATCH_AND_REPORT_STD_EXCEPTION( std::bad_exception )
     CATCH_AND_REPORT_STD_EXCEPTION( std::domain_error )
     CATCH_AND_REPORT_STD_EXCEPTION( std::invalid_argument )

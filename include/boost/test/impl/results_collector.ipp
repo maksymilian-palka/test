@@ -17,6 +17,7 @@
 #include <boost/test/unit_test_log.hpp>
 #include <boost/test/results_collector.hpp>
 #include <boost/test/framework.hpp>
+#include <boost/test/execution_monitor.hpp>
 
 #include <boost/test/tree/test_unit.hpp>
 #include <boost/test/tree/visitor.hpp>
@@ -57,6 +58,7 @@ test_results::passed() const
             p_assertions_failed <= p_expected_failures  &&
             // p_test_cases_skipped == 0                   &&
             !p_timedout                                 &&
+            p_test_cases_timedout == 0                  &&
             !aborted();
 }
 
@@ -223,10 +225,10 @@ results_collector_t::test_unit_finish( test_unit const& tu, unsigned long elapse
         test_results & tr = s_rc_impl().m_results_store[tu.p_id];
         tr.p_duration_microseconds.value = elapsed_in_microseconds;
 
-        if( tu.p_timeout && elapsed_in_microseconds >= (tu.p_timeout.value*1E6)) {
+        /*if( tu.p_timeout && elapsed_in_microseconds >= (tu.p_timeout.value*1E6)) {
             tr.p_timedout.value = true;
-            BOOST_TEST_FRAMEWORK_MESSAGE( "Test case " << tu.full_name() << " lasted longer than expected: flagging as 'timed-out'" );
-        }
+            //BOOST_TEST_FRAMEWORK_ERROR( "Test case " << tu.full_name() << " lasted longer than expected: failing as 'timed-out'" );
+        }*/
 
         bool num_failures_match = tr.p_aborted || tr.p_assertions_failed >= tr.p_expected_failures;
         if( !num_failures_match )
@@ -277,11 +279,14 @@ results_collector_t::assertion_result( unit_test::assertion_result ar )
 //____________________________________________________________________________//
 
 void
-results_collector_t::exception_caught( execution_exception const& )
+results_collector_t::exception_caught( execution_exception const& ex)
 {
     test_results& tr = s_rc_impl().m_results_store[framework::current_test_case_id()];
 
     tr.p_assertions_failed.value++;
+    if( ex.code() == execution_exception::timeout_error ) {
+        tr.p_timedout.value = true;
+    }
 }
 
 //____________________________________________________________________________//
