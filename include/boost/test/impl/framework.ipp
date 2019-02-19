@@ -796,13 +796,6 @@ public:
                 // cleanup leftover context
                 m_context.clear();
 
-                // we check for timeouts
-                if(result == unit_test_monitor_t::test_ok && false) {
-                    if(timeout != 0 && elapsed_microseconds >= ((timeout+1)*1E6)) {
-                        result = unit_test_monitor_t::os_timeout;
-                    }
-                }
-
                 // restore state (scope exit) and abort if necessary
             }
         }

@@ -71,11 +71,11 @@ public:
     counter_prop    p_test_cases_failed;        //!< Number of failing test cases
     counter_prop    p_test_cases_skipped;       //!< Number of skipped test cases
     counter_prop    p_test_cases_aborted;       //!< Number of aborted test cases
-    counter_prop    p_test_cases_timedout;      //!< Number of timed out test cases
+    counter_prop    p_test_cases_timed_out;     //!< Number of timed out test cases
     counter_prop    p_duration_microseconds;    //!< Duration of the test in microseconds
     bool_prop       p_aborted;                  //!< Indicates that the test unit execution has been aborted
     bool_prop       p_skipped;                  //!< Indicates that the test unit execution has been skipped
-    bool_prop       p_timedout;                 //!< Indicates that the test unit has timed out
+    bool_prop       p_timed_out;                //!< Indicates that the test unit has timed out
 
     /// Returns true if test unit passed
     bool            passed() const;
