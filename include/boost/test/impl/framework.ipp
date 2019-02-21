@@ -242,7 +242,10 @@ class name_filter : public test_tree_visitor {
 
 public:
     // Constructor
-    name_filter( test_unit_id_list& targ_list, const_string filter_expr ) : m_targ_list( targ_list ), m_depth( 0 )
+    name_filter( test_unit_id_list& targ_list, const_string filter_expr, bool add_on_match ) 
+        : m_targ_list( targ_list )
+	, m_add_on_match( add_on_match )
+	, m_depth( 0 )
     {
 #ifdef BOOST_TEST_SUPPORT_TOKEN_ITERATOR
         utils::string_token_iterator tit( filter_expr, (utils::dropped_delimeters = "/",
@@ -279,7 +282,18 @@ private:
     {
         // make sure we only accept test cases if we match last component of the filter
         if( m_depth == m_components.size() && filter_unit( tc ) )
-            m_targ_list.push_back( tc.p_id ); // found a test case
+        {
+            // add if selection list is empty or if test case is already on the list
+            if ( m_add_on_match ) {
+                m_targ_list.push_back( tc.p_id ); // found a test case
+            }
+        } 
+        else { 
+            test_unit_id_list::iterator it = std::find( m_targ_list.begin(), m_targ_list.end(), tc.p_id );
+            if ( it != m_targ_list.end() ) {
+                m_targ_list.erase( it );
+            }
+        }
     }
     virtual bool    test_suite_start( test_suite const& ts )
     {
@@ -305,6 +319,8 @@ private:
 
     components_per_level    m_components;
     test_unit_id_list&      m_targ_list;
+    bool                    m_add_on_match;
+
     unsigned                m_depth;
 };
 
@@ -314,8 +330,9 @@ private:
 
 class label_filter : public test_tree_visitor {
 public:
-    label_filter( test_unit_id_list& targ_list, const_string label )
+    label_filter( test_unit_id_list& targ_list, const_string label, bool add_on_match )
     : m_targ_list( targ_list )
+    , m_add_on_match( add_on_match )
     , m_label( label )
     {}
 
@@ -324,9 +341,18 @@ private:
     virtual bool    visit( test_unit const& tu )
     {
         if( tu.has_label( m_label ) ) {
-            // found a test unit; add it to list of tu to enable with children and stop recursion in case of suites
-            m_targ_list.push_back( tu.p_id );
+            if ( m_add_on_match )
+            {
+                // found a test unit; add it to list of tu to enable with children and stop recursion in case of suites
+                m_targ_list.push_back( tu.p_id );
+            } 
             return false;
+        }
+        else {
+            test_unit_id_list::iterator it = std::find(m_targ_list.begin(), m_targ_list.end(), tu.p_id );
+            if ( it != m_targ_list.end() ) {
+                m_targ_list.erase( it );
+            }
         }
 
         return true;
@@ -334,6 +360,8 @@ private:
 
     // Data members
     test_unit_id_list&  m_targ_list;
+    bool                m_add_on_match;
+
     const_string        m_label;
 };
 
@@ -379,16 +407,16 @@ private:
 // ************************************************************************** //
 
 static void
-add_filtered_test_units( test_unit_id master_tu_id, const_string filter, test_unit_id_list& targ )
+add_filtered_test_units( test_unit_id master_tu_id, const_string filter, test_unit_id_list& targ, bool add_on_match )
 {
     // Choose between two kinds of filters
     if( filter[0] == '@' ) {
         filter.trim_left( 1 );
-        label_filter lf( targ, filter );
+        label_filter lf( targ, filter, add_on_match );
         traverse_test_tree( master_tu_id, lf, true );
     }
     else {
-        name_filter nf( targ, filter );
+        name_filter nf( targ, filter, add_on_match );
         traverse_test_tree( master_tu_id, nf, true );
     }
 }
@@ -410,10 +438,13 @@ parse_filters( test_unit_id master_tu_id, test_unit_id_list& tu_to_enable, test_
         utils::string_token_iterator t_filter_it( filter, (utils::dropped_delimeters = ":",
                                                            utils::kept_delimeters = utils::dt_none) );
 
+
         while( t_filter_it != utils::string_token_iterator() ) {
-            const_string filter_token = *t_filter_it;
 
             enum { SELECTOR, ENABLER, DISABLER } filter_type = SELECTOR;
+
+            // check for & operator
+            const_string filter_token = *t_filter_it;
 
             // 11. Deduce filter type
             if( filter_token[0] == '!' || filter_token[0] == '+' ) {
@@ -424,13 +455,30 @@ parse_filters( test_unit_id master_tu_id, test_unit_id_list& tu_to_enable, test_
 
             had_selector_filter |= filter_type == SELECTOR;
 
-            // 12. Add test units to corresponding list
-            switch( filter_type ) {
-            case SELECTOR:
-            case ENABLER:  add_filtered_test_units( master_tu_id, filter_token, tu_to_enable ); break;
-            case DISABLER: add_filtered_test_units( master_tu_id, filter_token, tu_to_disable ); break;
+            utils::string_token_iterator t_and_it( filter_token, (utils::dropped_delimeters = "&",
+                                                               utils::kept_delimeters = utils::dt_none) );
+            test_unit_id_list selected_test_list;
+            bool is_first_condition = true;
+
+            while ( t_and_it != utils::string_token_iterator() ) {
+
+                filter_token = *t_and_it;
+
+                // 12. Add test units to corresponding list
+                switch( filter_type ) {
+                case SELECTOR:
+                case ENABLER: add_filtered_test_units( master_tu_id, filter_token, selected_test_list, is_first_condition ); break;
+                case DISABLER: add_filtered_test_units( master_tu_id, filter_token, selected_test_list, is_first_condition ); break; 
+                }
+                ++t_and_it;
+                is_first_condition = false;
             }
 
+            switch ( filter_type ) {
+                case SELECTOR:
+                case ENABLER: std::copy( selected_test_list.begin(), selected_test_list.end(), std::back_inserter( tu_to_enable ) ); break;
+                case DISABLER: std::copy( selected_test_list.begin(), selected_test_list.end(), std::back_inserter( tu_to_disable ) ); break; 
+            }
             ++t_filter_it;
         }
     }
