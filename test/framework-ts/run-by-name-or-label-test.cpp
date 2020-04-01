@@ -460,7 +460,109 @@ BOOST_AUTO_TEST_CASE( test_dependency_handling )
     }
 }
 
-BOOST_AUTO_TEST_CASE( test_run_by_expression_1 )
+BOOST_AUTO_TEST_CASE( test_run_by_expression_compatibility_1 )
+{
+    utf::test_case* tc;
+
+    //
+    // ts2 (@FAST): A(@L1), C, longnameA,
+    //         suite ts1 (@f2) : C (@L1), D(@L1, @l2),
+    // root suite: A, B, longnameA(@f2), Blongname
+    //
+    // + root
+    //  \ - A
+    //  | - B
+    //  | - longnameA, @f2
+    //  | - Blongname
+    //  |
+    //  + ts2, @FAST
+    //   \ - A, @L1
+    //   | - C
+    //   | - longnameA
+    //   |
+    //   + ts1, @f2
+    //     - C, @L1
+    //     - D, @L1 @l2
+    //
+    //
+
+
+    utf::test_suite* master_ts = BOOST_TEST_SUITE("local master");
+
+    utf::test_suite* ts1 = BOOST_TEST_SUITE("ts1");
+    ts1->add_label( "f2" );
+    ts1->add( tc=BOOST_TEST_CASE( &C ) );
+    tc->add_label( "L1" );
+    ts1->add( tc=BOOST_TEST_CASE( &D ) );
+    tc->add_label( "L1" );
+    tc->add_label( "l2" );
+
+    utf::test_suite* ts2 = BOOST_TEST_SUITE("ts2");
+    ts2->add_label( "FAST" );
+    ts2->add( tc=BOOST_TEST_CASE( &A ) );
+    tc->add_label( "L1" );
+    ts2->add( BOOST_TEST_CASE( &C ) );
+    ts2->add( BOOST_TEST_CASE( &longnameA ) );
+    ts2->add( ts1 );
+
+    master_ts->add( BOOST_TEST_CASE( &A ) );
+    master_ts->add( BOOST_TEST_CASE( &B ) );
+    master_ts->add( tc=BOOST_TEST_CASE( &longnameA ) );
+    tc->add_label( "f2" );
+    master_ts->add( BOOST_TEST_CASE( &Blongname ) );
+    master_ts->add( ts2 );
+
+
+    master_ts->p_default_status.value = utf::test_unit::RS_ENABLED;
+    utf::framework::finalize_setup_phase( master_ts->p_id );
+
+    {
+        char const* argv[] = { "a.exe", "--run_test=(@L1)" };
+        test_count( master_ts, argv, sizeof(argv), 3 );
+    }
+
+    {
+        char const* argv[] = { "a.exe", "--run_test=!(@INV)" };
+        test_count( master_ts, argv, sizeof(argv), 9 );
+    }
+
+    {
+        char const* argv[] = { "a.exe", "--run_test=!(@L1)" };
+        test_count( master_ts, argv, sizeof(argv), 6 );
+    }
+
+    {
+        char const* argv[] = { "a.exe", "--run_test=(@l2)" };
+        test_count( master_ts, argv, sizeof(argv), 1 );
+    }
+
+    {
+        char const* argv[] = { "a.exe", "--run_test=(@inval)" };
+        test_count( master_ts, argv, sizeof(argv), 0 );
+    }
+
+    {
+        char const* argv[] = { "a.exe", "--run_test=(@FAST)" };
+        test_count( master_ts, argv, sizeof(argv), 5 );
+    }
+
+    {
+        char const* argv[] = { "a.exe", "--run_test=(@f2)" };
+        test_count( master_ts, argv, sizeof(argv), 3 );
+    }
+
+    {
+        char const* argv[] = { "a.exe", "--run_test=(@L1)", "--run_test=(@l2)" };
+        test_count( master_ts, argv, sizeof(argv), 3 );
+    }
+
+    {
+        char const* argv[] = { "a.exe", "--run_test=(@L1)", "--run_test=!(@l2)" };
+        test_count( master_ts, argv, sizeof(argv), 2 );
+    }
+}
+
+BOOST_AUTO_TEST_CASE( test_run_by_expression_label )
 {
   utf::test_case* tc;
 
@@ -468,6 +570,24 @@ BOOST_AUTO_TEST_CASE( test_run_by_expression_1 )
   // ts2 (@FAST): A(@L1), C, longnameA,
   //         suite ts1 (@f2) : C (@L1), D(@L1, @l2),
   // root suite: A, B, longnameA(@f2), Blongname
+  //
+  // + root
+  //  \ - A, @l2
+  //  | - B
+  //  | - longnameA, @f2, @f3
+  //  | - Blongname
+  //  |
+  //  + ts2, @FAST
+  //   \ - A, @L1
+  //   | - C
+  //   | - longnameA
+  //   |
+  //   + ts1, @f2
+  //     - C, @L1
+  //     - D, @L1 @l2
+  //
+  //
+
 
   utf::test_suite* master_ts = BOOST_TEST_SUITE("local master");
 
@@ -487,10 +607,12 @@ BOOST_AUTO_TEST_CASE( test_run_by_expression_1 )
   ts2->add( BOOST_TEST_CASE( &longnameA ) );
   ts2->add( ts1 );
 
-  master_ts->add( BOOST_TEST_CASE( &A ) );
+  master_ts->add( tc = BOOST_TEST_CASE( &A ) );
+  tc->add_label("l2");
   master_ts->add( BOOST_TEST_CASE( &B ) );
-  master_ts->add( tc=BOOST_TEST_CASE( &longnameA ) );
+  master_ts->add( tc = BOOST_TEST_CASE( &longnameA ) );
   tc->add_label( "f2" );
+  tc->add_label( "f3" );
   master_ts->add( BOOST_TEST_CASE( &Blongname ) );
   master_ts->add( ts2 );
 
@@ -498,48 +620,52 @@ BOOST_AUTO_TEST_CASE( test_run_by_expression_1 )
   master_ts->p_default_status.value = utf::test_unit::RS_ENABLED;
   utf::framework::finalize_setup_phase( master_ts->p_id );
 
+    {
+        char const* argv[] = { "a.exe", "--run_test=((ts2/ts1/* & @L1) & !@l2)" };
+        test_count( master_ts, argv, sizeof(argv), 1 );
+    }
+    {
+        char const* argv[] = { "a.exe", "--run_test=((ts2/ts1/* & @l2), @f3)" };
+        test_count( master_ts, argv, sizeof(argv), 2 );
+    }
   {
-    char const* argv[] = { "a.exe", "--run_test=(@L1, @l2)" };
-    test_count( master_ts, argv, sizeof(argv), 3 );
-  }
-
-  {
-    char const* argv[] = { "a.exe", "--run_test=!@INV" };
-    test_count( master_ts, argv, sizeof(argv), 9 );
-  }
-
-  {
-    char const* argv[] = { "a.exe", "--run_test=!@L1" };
-    test_count( master_ts, argv, sizeof(argv), 6 );
-  }
-
-  {
-    char const* argv[] = { "a.exe", "--run_test=@l2" };
+    char const* argv[] = { "a.exe", "--run_test=((@L1) & (@l2))" };
     test_count( master_ts, argv, sizeof(argv), 1 );
   }
 
   {
-    char const* argv[] = { "a.exe", "--run_test=@inval" };
+    char const* argv[] = { "a.exe", "--run_test=((@L1, @l2))" };
+    test_count( master_ts, argv, sizeof(argv), 4 );
+  }
+    return;
+
+  {
+    char const* argv[] = { "a.exe", "--run_test=(@l2)" };
+    test_count( master_ts, argv, sizeof(argv), 1 );
+  }
+
+  {
+    char const* argv[] = { "a.exe", "--run_test=(@inval)" };
     test_count( master_ts, argv, sizeof(argv), 0 );
   }
 
   {
-    char const* argv[] = { "a.exe", "--run_test=@FAST" };
+    char const* argv[] = { "a.exe", "--run_test=(@FAST)" };
     test_count( master_ts, argv, sizeof(argv), 5 );
   }
 
   {
-    char const* argv[] = { "a.exe", "--run_test=@f2" };
+    char const* argv[] = { "a.exe", "--run_test=(@f2)" };
     test_count( master_ts, argv, sizeof(argv), 3 );
   }
 
   {
-    char const* argv[] = { "a.exe", "--run_test=@L1", "--run_test=@l2" };
+    char const* argv[] = { "a.exe", "--run_test=(@L1)", "--run_test=(@l2)" };
     test_count( master_ts, argv, sizeof(argv), 3 );
   }
 
   {
-    char const* argv[] = { "a.exe", "--run_test=@L1", "--run_test=!@l2" };
+    char const* argv[] = { "a.exe", "--run_test=(@L1)", "--run_test=!(@l2)" };
     test_count( master_ts, argv, sizeof(argv), 2 );
   }
 }

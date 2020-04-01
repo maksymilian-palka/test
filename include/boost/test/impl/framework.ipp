@@ -50,6 +50,7 @@
 // Boost
 #include <boost/test/utils/timer.hpp>
 #include <boost/bind.hpp>
+#include <boost/optional.hpp>
 
 // STL
 #include <limits>
@@ -381,97 +382,134 @@ static void
 add_filtered_test_units( test_unit_id master_tu_id, const_string filter, test_unit_id_list& targ );
 
 static void
-intersect_result_lists(test_unit_id_list& left, const test_unit_id_list& right )
+intersect_result_lists(std::set<boost::unit_test::test_unit_id>& left, const test_unit_id_list& right )
 {
-    for (int i = static_cast<int>(left.size() - 1); i >= 0; --i ) {
-        if(std::find(right.begin(), right.end(), left[i]) == right.end()) {
+    typedef std::set<boost::unit_test::test_unit_id> set_t;
+    set_t::iterator it = left.begin();
+    while (it != left.end()){
+        if(std::find(right.begin(), right.end(), *it) == right.end()) {
             // not a common element. remove it
-            left.erase(left.begin()+ i);
+            left.erase(it++);
+        } else {
+            ++it;
         }
     }
 }
 
-static void process_expression_group(test_unit_id master_tu_id, /*or maybe string_view?*/const_string filter, test_unit_id_list& targ)
+static void
+combine_expression_results(std::set<boost::unit_test::test_unit_id>& left, const test_unit_id_list& right,
+        bool& append, bool& intersect) {
+    if (append )
+    {
+        left.insert(right.begin(), right.end());
+        append = false;
+    }
+    else if (intersect )
+    {
+        intersect_result_lists(left, right);
+        intersect = false;
+    }
+}
+
+static void
+process_expression_group(test_unit_id master_tu_id, /*or maybe string_view?*/const_string filter, test_unit_id_list& targ)
 {
     filter.trim_left(1);
     filter.trim_right(1);
 
     // scan for all sub-groups first (only on this level)
-    typedef std::vector<std::pair<int, int>> TSubGroupInfo;
-    TSubGroupInfo subGroups;
-    int openingBracketIdx = 0;
-    int openingBracketCount = 0;
-    for (int idx = 0; idx < filter.size(); ++idx)
+    typedef std::vector<boost::optional<const_string>> decomposed_t;
+    typedef std::vector<test_unit_id_list> expression_results_t;
+    decomposed_t decomposed_filter;
+    expression_results_t expressionResults;
+
+    std::size_t openingBracketIdx = 0;
+    std::size_t openingBracketCount = 0;
+    std::size_t topLevelIdx = 0;
+    for (std::size_t idx = 0; idx < filter.size(); ++idx)
     {
         if (filter[idx] == '(')
         {
+            if (idx > topLevelIdx)
+            {
+                const_string t = filter.substr(topLevelIdx, idx);
+                std::string debug(t.begin(), t.end());
+                decomposed_filter.push_back(t);
+            }
             ++openingBracketCount;
             openingBracketIdx = idx;
         }
-        else if ((filter[idx] == '}') && (--openingBracketCount == 0))
+        else if ((filter[idx] == ')') && (--openingBracketCount == 0))
         {
-            subGroups.push_back(std::make_pair(openingBracketIdx, idx));
+            decomposed_filter.push_back(boost::optional<const_string>());
+            const_string subExpressionFilter = filter.substr(openingBracketIdx, idx + 1);
+            expressionResults.push_back(expression_results_t::value_type());
+            process_expression_group(master_tu_id, subExpressionFilter, expressionResults.back());
+            topLevelIdx = idx + 1;
         }
     }
 
-    // process subgroups
-    std::vector<test_unit_id_list> subGroupResult;
-    std::string expression(filter.begin(), filter.end());
-    for (TSubGroupInfo::reverse_iterator it = subGroups.rbegin(); it != subGroups.rend(); ++it) {
-        const_string left = filter.substr(0, it->first);
-        const_string right = filter.substr(it->second, it->second);
-        std::string newFilter(left.begin(), left.end());
-        newFilter.append(1, '`');
-        newFilter.append(right.begin(), right.end());
-        expression = newFilter;
-        const_string subFilter = filter.substr(it->first, it->second);
-        subGroupResult.push_back(test_unit_id_list());
-        process_expression_group(master_tu_id, subFilter, subGroupResult.back());
-        filter = expression;
+    if (decomposed_filter.empty())
+    {
+        // the case when there is no sub expressions
+        decomposed_filter.push_back(filter);
+    }
+    else if (topLevelIdx < filter.size())
+    {
+        // add the filter part - between the last ')' and the end of the filter
+        decomposed_filter.push_back(filter.substr(topLevelIdx, filter.size()));
     }
 
-    // process the expression
-    utils::string_token_iterator expression_it(filter, (utils::kept_delimeters = "&,`",
-            utils::dropped_delimeters = utils::dt_none ));
-
-    test_unit_id_list result;
     test_unit_id_list partialResult;
-    std::size_t subResultIdx = 0;
+    std::size_t subExpressionResultIdx = 0;
     bool intersectResult = false;
     bool appendToResult = true;
-    while (expression_it != utils::string_token_iterator()) {
-        const_string expr = *expression_it;
-        expr.trim(" ");
-        if (expr[0] == ',') {
-            // this is just adding to the current result
-            appendToResult = true;
-            intersectResult = false;
-        } else if (expr[0] == '`') {
-            // this is a placeholder for the subexpression result
-            if (appendToResult) {
-                result.insert(result.end(), subGroupResult[subResultIdx].begin(), subGroupResult[subResultIdx].end());
-                appendToResult = false;
-            } else if (intersectResult) {
-                intersect_result_lists(result, subGroupResult[subResultIdx]);
-                intersectResult = false;
+    std::set<boost::unit_test::test_unit_id> result;
+
+    for (decomposed_t::iterator it = decomposed_filter.begin(); it != decomposed_filter.end(); ++it)
+    {
+        if (it->has_value())
+        {
+//            const_string expr_ = it->get();
+//            expr_.trim(" ");
+            // this is a valid expression. Parse it
+            utils::string_token_iterator expression_it(**it, (utils::kept_delimeters = "&,",
+                    utils::dropped_delimeters = utils::dt_none));
+            //test_unit_id_list result;
+            while (expression_it != utils::string_token_iterator())
+            {
+                const_string expr = *expression_it;
+                expr.trim(" ");
+                if (expr.empty())
+                {
+                    ++expression_it;
+                    continue;
+                }
+                std::string debug(expr.begin(), expr.end());
+                if (expr[0] == ',')
+                {
+                    // this is just adding to the current result
+                    appendToResult = true;
+                    intersectResult = false;
+                }
+                else if (expr[0] == '&')
+                {
+                    intersectResult = true;
+                    appendToResult = false;
+                }
+                else
+                {
+                    partialResult.clear();
+                    add_filtered_test_units(master_tu_id, expr, partialResult);
+                    combine_expression_results(result, partialResult, appendToResult, intersectResult);
+                }
+                ++expression_it;
             }
-            ++subResultIdx;
-        } else if (expr[0] == '&') {
-            intersectResult = true;
-            appendToResult = false;
         } else {
-            partialResult.clear();
-            add_filtered_test_units(master_tu_id, expr, partialResult);
-            if (appendToResult) {
-                result.insert(result.end(), partialResult.begin(), partialResult.end());
-                appendToResult = false;
-            } else if (intersectResult) {
-                intersect_result_lists(result, partialResult);
-                intersectResult = false;
-            }
-            partialResult.clear();
-       }
-        ++expression_it;
+            // this is sub-expression, so just grab the results
+            combine_expression_results(result, expressionResults[subExpressionResultIdx++],
+                    appendToResult, intersectResult);
+        }
     }
     // remove duplicates
     targ.insert(targ.end(), result.begin(), result.end());
