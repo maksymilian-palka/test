@@ -403,7 +403,8 @@ intersect_result_lists(std::set<boost::unit_test::test_unit_id> &left,
     }
 }
 
-static test_unit_id_list inverse_result(const test_unit_id_list &to_inverse,
+static test_unit_id_list
+inverse_results(const test_unit_id_list &to_inverse,
                                         const test_unit_id_list &all_tests)
 {
     test_unit_id_list result;
@@ -433,6 +434,21 @@ combine_expression_results(std::set<boost::unit_test::test_unit_id> &left,
     {
         intersect_result_lists(left, right);
         intersect = false;
+    }
+}
+
+static void
+unfold_test_suites(test_unit_id_list& list) {
+    for (std::size_t index = 0; index < list.size(); ++index) {
+        if (ut_detail::test_id_2_unit_type( list[index] ) == TUT_CASE) {
+            continue;
+        }
+        test_case_collector tcc(true, true);
+        traverse_test_tree(framework::get<test_suite>( list[index]), tcc, true);
+        if (!tcc.ids().empty()) {
+            list.erase(list.begin() + index);
+            list.insert(list.begin() + index, tcc.ids().begin(), tcc.ids().end());
+        }
     }
 }
 
@@ -497,12 +513,13 @@ static void process_expression_group(test_unit_id master_tu_id,
         decomposed_filter.push_back(filter.substr(closing_bracket_index, filter.size()));
     }
 
-    std::size_t subExpressionResultIdx = 0;
-    bool intersectResult = false;
-    bool appendToResult = true;
-    bool inverse = false;
+    std::size_t subexpression_result_index = 0;
+    bool intersect_result = false;
+    bool append_to_result = true;
+    bool inverse_result = false;
     std::set<boost::unit_test::test_unit_id> result;
 
+    const_string last_valid_expression;
     for (decomposed_filter_t::iterator it = decomposed_filter.begin();
          it != decomposed_filter.end(); ++it)
     {
@@ -527,46 +544,63 @@ static void process_expression_group(test_unit_id master_tu_id,
                 std::string debug(expression.begin(), expression.end());
                 if (expression[0] == ';')
                 {
+                    BOOST_TEST_SETUP_ASSERT(!intersect_result && !append_to_result,
+                                            std::string("Consecutive operators ('&', ';') not allowed, found after: ")
+                                            + last_valid_expression);
+                    BOOST_TEST_SETUP_ASSERT(!inverse_result,
+                                            std::string("Inverse operator '!' not allowed before ';', found after: ")
+                                            + last_valid_expression);
                     // this is just adding to the current result
-                    appendToResult = true;
-                    intersectResult = false;
-                    inverse = false;
+                    append_to_result = true;
+                    intersect_result = false;
                 }
                 else if (expression[0] == '&')
                 {
-                    intersectResult = true;
-                    appendToResult = false;
-                    inverse = false;
+                    BOOST_TEST_SETUP_ASSERT(!intersect_result && !append_to_result,
+                            std::string("Consecutive operators ('&', ';') not allowed, found after: ")
+                            + last_valid_expression);
+                    BOOST_TEST_SETUP_ASSERT(!inverse_result,
+                                            std::string("Inverse operator '!' not allowed before '&', found after: ")
+                                            + last_valid_expression);
+                    intersect_result = true;
+                    append_to_result = false;
                 }
                 else if (expression[0] == '!')
                 {
-                    inverse = true;
+                    BOOST_TEST_SETUP_ASSERT(!inverse_result,
+                                                    std::string("Consecutive operator '!' not allowed, found after: ")
+                                                    + last_valid_expression);
+                    inverse_result = true;
                 }
                 else
                 {
                     test_unit_id_list subexpression_result;
                     subexpression_result.clear();
+                    last_valid_expression = expression;
                     add_filtered_test_units(master_tu_id, expression, subexpression_result);
-                    if (inverse)
+                    unfold_test_suites(subexpression_result);
+                    if (inverse_result)
                     {
-                        BOOST_TEST_SETUP_ASSERT(
-                                expression[0] == '@',
-                                "Inversion in expression is supported only for labels");
-                        subexpression_result = inverse_result(subexpression_result, all_tests);
-                        inverse = false;
+                        subexpression_result = inverse_results(subexpression_result, all_tests);
+                        inverse_result = false;
                     }
-                    combine_expression_results(result, subexpression_result, appendToResult,
-                                               intersectResult);
+                    combine_expression_results(result, subexpression_result, append_to_result,
+                                               intersect_result);
                 }
                 ++expression_it;
             }
         }
         else
         {
+            if (inverse_result) {
+                subexpressions_results[subexpression_result_index] =
+                        inverse_results(subexpressions_results[subexpression_result_index], all_tests);
+                inverse_result = false;
+            }
             // this is sub-expression, so just grab the results
             combine_expression_results(result,
-                                       subexpressions_results[subExpressionResultIdx++],
-                                       appendToResult, intersectResult);
+                                       subexpressions_results[subexpression_result_index++],
+                                       append_to_result, intersect_result);
         }
     }
     // remove duplicates
@@ -580,9 +614,9 @@ process_expression_filter(test_unit_id master_tu_id,
 {
     BOOST_TEST_SETUP_ASSERT(*(filter.end() - 1) == ')',
                             "Missing closing bracket.");
-    std::size_t opening_bracket_count =
+    size_t opening_bracket_count =
             std::count(filter.begin(), filter.end(), '(');
-    std::size_t closing_bracket_count =
+    size_t closing_bracket_count =
             std::count(filter.begin(), filter.end(), ')');
     BOOST_TEST_SETUP_ASSERT(opening_bracket_count == closing_bracket_count,
                             "Mismatch between '(' and ')' brackets.");

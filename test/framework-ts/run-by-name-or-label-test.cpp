@@ -67,6 +67,7 @@ test_names( utf::test_suite* master_ts, char const** argv, int argc, boost::unit
     utf::test_case_collector tcc(false);
     utf::traverse_test_tree( master_ts->p_id, tcc );
 
+    int expected_count = 0;
     while (!expected.empty())
     {
         std::size_t idx = expected.find(",");
@@ -82,7 +83,26 @@ test_names( utf::test_suite* master_ts, char const** argv, int argc, boost::unit
         tc_name.trim(" ");
         bool found = std::find(tcc.testcases().begin(), tcc.testcases().end(), tc_name) != tcc.testcases().end();
         BOOST_TEST(found);
+        ++expected_count;
     }
+    BOOST_TEST(expected_count == tcc.ids().size());
+}
+
+void expect_exception(utf::test_suite *master_ts, char const **argv, int argc,
+                      boost::unit_test::const_string exception_text) {
+  argc /= sizeof(char *);
+
+  BOOST_TEST_INFO(argv[1]);
+  if (argc > 2)
+    BOOST_TEST_INFO(argv[2]);
+
+  try {
+    utf::runtime_config::init(argc, (char **)argv);
+    utf::framework::impl::setup_for_execution(*master_ts);
+    BOOST_TEST(false);
+  } catch (const std::exception &exception) {
+    BOOST_TEST(exception.what() == exception_text);
+  }
 }
 
 BOOST_AUTO_TEST_CASE( test_run_by_name )
@@ -632,8 +652,18 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_compatibility_2) {
   }
 
   {
+    char const *argv[] = {"a.exe", "--run_test=(!*)"};
+    test_count(master_ts, argv, sizeof(argv), 0);
+  }
+
+  {
     char const *argv[] = {"a.exe", "--run_test=(*/*)"};
     test_count(master_ts, argv, sizeof(argv), 5);
+  }
+
+  {
+    char const *argv[] = {"a.exe", "--run_test=(!*/*)"};
+    test_count(master_ts, argv, sizeof(argv), 4);
   }
 
   {
@@ -642,8 +672,18 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_compatibility_2) {
   }
 
   {
+    char const *argv[] = {"a.exe", "--run_test=(!*/*/*)"};
+    test_count(master_ts, argv, sizeof(argv), 7);
+  }
+
+  {
     char const *argv[] = {"a.exe", "--run_test=(klmn)"};
     test_count(master_ts, argv, sizeof(argv), 0);
+  }
+
+  {
+    char const *argv[] = {"a.exe", "--run_test=(!klmn)"};
+    test_count(master_ts, argv, sizeof(argv), 9);
   }
 
   {
@@ -652,8 +692,18 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_compatibility_2) {
   }
 
   {
+    char const *argv[] = {"a.exe", "--run_test=(!A)"};
+    test_count(master_ts, argv, sizeof(argv), 8);
+  }
+
+  {
     char const *argv[] = {"a.exe", "--run_test=(*A)"};
     test_count(master_ts, argv, sizeof(argv), 2);
+  }
+
+  {
+    char const *argv[] = {"a.exe", "--run_test=(!*A)"};
+    test_count(master_ts, argv, sizeof(argv), 7);
   }
 
   {
@@ -662,8 +712,18 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_compatibility_2) {
   }
 
   {
+    char const *argv[] = {"a.exe", "--run_test=(!B*)"};
+    test_count(master_ts, argv, sizeof(argv), 7);
+  }
+
+  {
     char const *argv[] = {"a.exe", "--run_test=(*ngn*)"};
     test_count(master_ts, argv, sizeof(argv), 2);
+  }
+
+  {
+    char const *argv[] = {"a.exe", "--run_test=(!*ngn*)"};
+    test_count(master_ts, argv, sizeof(argv), 7);
   }
 
   {
@@ -672,8 +732,18 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_compatibility_2) {
   }
 
   {
+    char const *argv[] = {"a.exe", "--run_test=(!ts2)"};
+    test_count(master_ts, argv, sizeof(argv), 4);
+  }
+
+  {
     char const *argv[] = {"a.exe", "--run_test=(ts2/*)"};
     test_count(master_ts, argv, sizeof(argv), 5);
+  }
+
+  {
+    char const *argv[] = {"a.exe", "--run_test=(!ts2/*)"};
+    test_count(master_ts, argv, sizeof(argv), 4);
   }
 
   {
@@ -682,8 +752,18 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_compatibility_2) {
   }
 
   {
+    char const *argv[] = {"a.exe", "--run_test=(!ts2/C)"};
+    test_count(master_ts, argv, sizeof(argv), 8);
+  }
+
+  {
     char const *argv[] = {"a.exe", "--run_test=(ts2/*A)"};
     test_count(master_ts, argv, sizeof(argv), 2);
+  }
+
+  {
+    char const *argv[] = {"a.exe", "--run_test=(!ts2/*A)"};
+    test_count(master_ts, argv, sizeof(argv), 7);
   }
 
   {
@@ -692,8 +772,18 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_compatibility_2) {
   }
 
   {
+    char const *argv[] = {"a.exe", "--run_test=(!ts2/ts1)"};
+    test_count(master_ts, argv, sizeof(argv), 7);
+  }
+
+  {
     char const *argv[] = {"a.exe", "--run_test=(ts2/ts1/C)"};
     test_count(master_ts, argv, sizeof(argv), 1);
+  }
+
+  {
+    char const *argv[] = {"a.exe", "--run_test=(!ts2/ts1/C)"};
+    test_count(master_ts, argv, sizeof(argv), 8);
   }
 
   {
@@ -702,13 +792,28 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_compatibility_2) {
   }
 
   {
+    char const *argv[] = {"a.exe", "--run_test=(!ts2/ts1/*D*)"};
+    test_count(master_ts, argv, sizeof(argv), 8);
+  }
+
+  {
     char const *argv[] = {"a.exe", "--run_test=(A,B)"};
     test_count(master_ts, argv, sizeof(argv), 2);
   }
 
   {
+    char const *argv[] = {"a.exe", "--run_test=(!A,B)"};
+    test_count(master_ts, argv, sizeof(argv), 7);
+  }
+
+  {
     char const *argv[] = {"a.exe", "--run_test=(*A,B)"};
     test_count(master_ts, argv, sizeof(argv), 3);
+  }
+
+  {
+    char const *argv[] = {"a.exe", "--run_test=(!*A,B)"};
+    test_count(master_ts, argv, sizeof(argv), 6);
   }
 
   {
@@ -722,8 +827,18 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_compatibility_2) {
   }
 
   {
+    char const *argv[] = {"a.exe", "--run_test=(!ts2/C,ts1/D)"};
+    test_count(master_ts, argv, sizeof(argv), 8);
+  }
+
+  {
     char const *argv[] = {"a.exe", "--run_test=(A)", "--run_test=(B)"};
     test_count(master_ts, argv, sizeof(argv), 2);
+  }
+
+  {
+    char const *argv[] = {"a.exe", "--run_test=(!(A ; B))"};
+    test_count(master_ts, argv, sizeof(argv), 7);
   }
 
   {
@@ -741,6 +856,11 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_compatibility_2) {
     char const *argv[] = {"a.exe", "--run_test=(A)",
                           "--run_test=(ts2/ts1/C,D):(longnameA)"};
     test_count(master_ts, argv, sizeof(argv), 4);
+  }
+
+  {
+    char const *argv[] = {"a.exe", "--run_test=(ts2 & !(ts2/*A))"};
+    test_count(master_ts, argv, sizeof(argv), 3);
   }
 }
 
@@ -813,6 +933,7 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_label) {
   utf::framework::finalize_setup_phase(master_ts->p_id);
 
   // intersection operator
+
   {
     char const *argv[] = {"a.exe", "--run_test=((((@lg1)) & !@lr1))"};
     test_names(master_ts, argv, sizeof(argv), "root/A");
@@ -860,6 +981,59 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_label) {
   {
     char const *argv[] = {"a.exe", "--run_test=(@cat_e; (@lr1 & @lg1))"};
     test_names(master_ts, argv, sizeof(argv), "root/ts2/E, root/B");
+  }
+
+  {
+      char const *argv[] = {"a.exe", "--run_test=(@lts & !(@cat_a ; @cat_b ; @cat_e))"};
+      test_names(master_ts, argv, sizeof(argv), "root/ts1/longnameA, root/ts2/F");
+  }
+
+  // error handling
+  {
+      char const *argv[] = {"a.exe", "--run_test=(((@cat_a))"};
+      expect_exception(master_ts, argv, sizeof(argv), "Mismatch between '(' and ')' brackets.");
+  }
+
+  {
+      char const *argv[] = {"a.exe", "--run_test=(@cat_a & & @cat_b)"};
+      expect_exception(master_ts, argv, sizeof(argv),
+              "Consecutive operators ('&', ';') not allowed, found after: @cat_a");
+  }
+
+  {
+      char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ;; cat_c)"};
+      expect_exception(master_ts, argv, sizeof(argv),
+                       "Consecutive operators ('&', ';') not allowed, found after: @cat_b");
+  }
+
+  {
+       char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ;& cat_c)"};
+       expect_exception(master_ts, argv, sizeof(argv),
+                        "Consecutive operators ('&', ';') not allowed, found after: @cat_b");
+  }
+
+  {
+     char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b &; cat_c)"};
+     expect_exception(master_ts, argv, sizeof(argv),
+                      "Consecutive operators ('&', ';') not allowed, found after: @cat_b");
+  }
+
+  {
+      char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ; cat_c !! cat_d)"};
+      expect_exception(master_ts, argv, sizeof(argv),
+                       "Consecutive operator '!' not allowed, found after: cat_c");
+  }
+
+  {
+      char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ; cat_c !& cat_d)"};
+      expect_exception(master_ts, argv, sizeof(argv),
+                       "Inverse operator '!' not allowed before '&', found after: cat_c");
+  }
+
+  {
+      char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ; cat_c !; cat_d)"};
+      expect_exception(master_ts, argv, sizeof(argv),
+                       "Inverse operator '!' not allowed before ';', found after: cat_c");
   }
 }
 //____________________________________________________________________________//
