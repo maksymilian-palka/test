@@ -990,50 +990,61 @@ BOOST_AUTO_TEST_CASE(test_run_by_expression_label) {
 
   // error handling
   {
-      char const *argv[] = {"a.exe", "--run_test=(((@cat_a))"};
-      expect_exception(master_ts, argv, sizeof(argv), "Mismatch between '(' and ')' brackets.");
+    char const *argv[] = {"a.exe", "--run_test=(((@cat_a))"};
+    expect_exception(master_ts, argv, sizeof(argv),
+                     "Mismatch between '(' and ')' brackets.");
   }
 
   {
-      char const *argv[] = {"a.exe", "--run_test=(@cat_a & & @cat_b)"};
-      expect_exception(master_ts, argv, sizeof(argv),
-              "Consecutive operators ('&', ';') not allowed, found after: @cat_a");
+    char const *argv[] = {"a.exe", "--run_test=(@cat_a & & @cat_b)"};
+    expect_exception(
+        master_ts, argv, sizeof(argv),
+        "Consecutive operators ('&', ';') not allowed, found after: @cat_a");
   }
 
   {
-      char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ;; cat_c)"};
-      expect_exception(master_ts, argv, sizeof(argv),
-                       "Consecutive operators ('&', ';') not allowed, found after: @cat_b");
+    char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ;; cat_c)"};
+    expect_exception(
+        master_ts, argv, sizeof(argv),
+        "Consecutive operators ('&', ';') not allowed, found after: @cat_b");
   }
 
   {
-       char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ;& cat_c)"};
-       expect_exception(master_ts, argv, sizeof(argv),
-                        "Consecutive operators ('&', ';') not allowed, found after: @cat_b");
+    char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ;& cat_c)"};
+    expect_exception(
+        master_ts, argv, sizeof(argv),
+        "Consecutive operators ('&', ';') not allowed, found after: @cat_b");
   }
 
   {
-     char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b &; cat_c)"};
-     expect_exception(master_ts, argv, sizeof(argv),
-                      "Consecutive operators ('&', ';') not allowed, found after: @cat_b");
+    char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b &; cat_c)"};
+    expect_exception(
+        master_ts, argv, sizeof(argv),
+        "Consecutive operators ('&', ';') not allowed, found after: @cat_b");
   }
 
   {
-      char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ; cat_c !! cat_d)"};
-      expect_exception(master_ts, argv, sizeof(argv),
-                       "Consecutive operator '!' not allowed, found after: cat_c");
+    char const *argv[] = {"a.exe",
+                          "--run_test=(@cat_a & @cat_b ; cat_c !! cat_d)"};
+    expect_exception(
+        master_ts, argv, sizeof(argv),
+        "Consecutive operator '!' not allowed, found after: cat_c");
   }
 
   {
-      char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ; cat_c !& cat_d)"};
-      expect_exception(master_ts, argv, sizeof(argv),
-                       "Inverse operator '!' not allowed before '&', found after: cat_c");
+    char const *argv[] = {"a.exe",
+                          "--run_test=(@cat_a & @cat_b ; cat_c !& cat_d)"};
+    expect_exception(
+        master_ts, argv, sizeof(argv),
+        "Inverse operator '!' not allowed before '&', found after: cat_c");
   }
 
   {
-      char const *argv[] = {"a.exe", "--run_test=(@cat_a & @cat_b ; cat_c !; cat_d)"};
-      expect_exception(master_ts, argv, sizeof(argv),
-                       "Inverse operator '!' not allowed before ';', found after: cat_c");
+    char const *argv[] = {"a.exe",
+                          "--run_test=(@cat_a & @cat_b ; cat_c !; cat_d)"};
+    expect_exception(
+        master_ts, argv, sizeof(argv),
+        "Inverse operator '!' not allowed before ';', found after: cat_c");
   }
 }
 //____________________________________________________________________________//
