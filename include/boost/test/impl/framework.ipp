@@ -34,6 +34,7 @@
 #include <boost/test/tree/visitor.hpp>
 #include <boost/test/tree/traverse.hpp>
 #include <boost/test/tree/test_case_counter.hpp>
+#include <boost/test/tree/test_case_collector.hpp>
 #include <boost/test/tree/global_fixture.hpp>
 
 #if BOOST_TEST_SUPPORT_TOKEN_ITERATOR
@@ -378,74 +379,110 @@ private:
 // **************                 parse_filters                ************** //
 // ************************************************************************** //
 
-static void
-add_filtered_test_units( test_unit_id master_tu_id, const_string filter, test_unit_id_list& targ );
+static void add_filtered_test_units(test_unit_id master_tu_id,
+                                    const_string filter,
+                                    test_unit_id_list &targ);
 
 static void
-intersect_result_lists(std::set<boost::unit_test::test_unit_id>& left, const test_unit_id_list& right )
+intersect_result_lists(std::set<boost::unit_test::test_unit_id> &left,
+                       const test_unit_id_list &right)
 {
     typedef std::set<boost::unit_test::test_unit_id> set_t;
     set_t::iterator it = left.begin();
-    while (it != left.end()){
-        if(std::find(right.begin(), right.end(), *it) == right.end()) {
+    while (it != left.end())
+    {
+        if (std::find(right.begin(), right.end(), *it) == right.end())
+        {
             // not a common element. remove it
             left.erase(it++);
-        } else {
+        }
+        else
+        {
             ++it;
         }
     }
 }
 
+static test_unit_id_list inverse_result(const test_unit_id_list &to_inverse,
+                                        const test_unit_id_list &all_tests)
+{
+    test_unit_id_list result;
+    for (test_unit_id_list::const_iterator it = all_tests.begin();
+         it != all_tests.end(); ++it)
+    {
+        if (std::find(to_inverse.begin(), to_inverse.end(), *it) ==
+            to_inverse.end())
+        {
+            result.push_back(*it);
+        }
+    }
+    return result;
+}
+
 static void
-combine_expression_results(std::set<boost::unit_test::test_unit_id>& left, const test_unit_id_list& right,
-        bool& append, bool& intersect) {
-    if (append )
+combine_expression_results(std::set<boost::unit_test::test_unit_id> &left,
+                           const test_unit_id_list &right, bool &append,
+                           bool &intersect)
+{
+    if (append)
     {
         left.insert(right.begin(), right.end());
         append = false;
     }
-    else if (intersect )
+    else if (intersect)
     {
         intersect_result_lists(left, right);
         intersect = false;
     }
 }
 
-static void
-process_expression_group(test_unit_id master_tu_id, /*or maybe string_view?*/const_string filter, test_unit_id_list& targ)
+static void process_expression_group(test_unit_id master_tu_id,
+                                     const_string filter,
+                                     test_unit_id_list &targ)
 {
+    static test_unit_id_list all_tests;
+    if (all_tests.empty())
+    {
+        test_case_collector tcc(true, true);
+        traverse_test_tree(master_tu_id, tcc, true);
+        all_tests = tcc.ids();
+    }
+
     filter.trim_left(1);
     filter.trim_right(1);
 
-    // scan for all sub-groups first (only on this level)
-    typedef std::vector<boost::optional<const_string>> decomposed_t;
+    // scan for all top level sub-expression and process them
+    typedef std::vector<boost::optional<const_string>> decomposed_filter_t;
     typedef std::vector<test_unit_id_list> expression_results_t;
-    decomposed_t decomposed_filter;
-    expression_results_t expressionResults;
-
-    std::size_t openingBracketIdx = 0;
-    std::size_t openingBracketCount = 0;
-    std::size_t topLevelIdx = 0;
+    decomposed_filter_t decomposed_filter;
+    expression_results_t subexpressions_results;
+    std::size_t opening_bracket_index = 0;
+    std::size_t opening_bracket_count = 0;
+    std::size_t closing_bracket_index = 0;
     for (std::size_t idx = 0; idx < filter.size(); ++idx)
     {
         if (filter[idx] == '(')
         {
-            if (idx > topLevelIdx)
+            if (++opening_bracket_count == 1)
             {
-                const_string t = filter.substr(topLevelIdx, idx);
-                std::string debug(t.begin(), t.end());
-                decomposed_filter.push_back(t);
+                opening_bracket_index = idx;
+                if (idx > closing_bracket_index)
+                {
+                    const_string t = filter.substr(closing_bracket_index, idx);
+                    std::string debug(t.begin(), t.end());
+                    decomposed_filter.push_back(t);
+                }
             }
-            ++openingBracketCount;
-            openingBracketIdx = idx;
         }
-        else if ((filter[idx] == ')') && (--openingBracketCount == 0))
+        else if ((filter[idx] == ')') && (--opening_bracket_count == 0))
         {
             decomposed_filter.push_back(boost::optional<const_string>());
-            const_string subExpressionFilter = filter.substr(openingBracketIdx, idx + 1);
-            expressionResults.push_back(expression_results_t::value_type());
-            process_expression_group(master_tu_id, subExpressionFilter, expressionResults.back());
-            topLevelIdx = idx + 1;
+            const_string subExpressionFilter =
+                    filter.substr(opening_bracket_index, idx + 1);
+            subexpressions_results.push_back(expression_results_t::value_type());
+            process_expression_group(master_tu_id, subExpressionFilter,
+                                     subexpressions_results.back());
+            closing_bracket_index = idx + 1;
         }
     }
 
@@ -454,61 +491,82 @@ process_expression_group(test_unit_id master_tu_id, /*or maybe string_view?*/con
         // the case when there is no sub expressions
         decomposed_filter.push_back(filter);
     }
-    else if (topLevelIdx < filter.size())
+    else if (closing_bracket_index < filter.size())
     {
         // add the filter part - between the last ')' and the end of the filter
-        decomposed_filter.push_back(filter.substr(topLevelIdx, filter.size()));
+        decomposed_filter.push_back(filter.substr(closing_bracket_index, filter.size()));
     }
 
-    test_unit_id_list partialResult;
     std::size_t subExpressionResultIdx = 0;
     bool intersectResult = false;
     bool appendToResult = true;
+    bool inverse = false;
     std::set<boost::unit_test::test_unit_id> result;
 
-    for (decomposed_t::iterator it = decomposed_filter.begin(); it != decomposed_filter.end(); ++it)
+    for (decomposed_filter_t::iterator it = decomposed_filter.begin();
+         it != decomposed_filter.end(); ++it)
     {
         if (it->has_value())
         {
-//            const_string expr_ = it->get();
-//            expr_.trim(" ");
+            //            const_string expr_ = it->get();
+            //            expr_.trim(" ");
             // this is a valid expression. Parse it
-            utils::string_token_iterator expression_it(**it, (utils::kept_delimeters = "&,",
-                    utils::dropped_delimeters = utils::dt_none));
-            //test_unit_id_list result;
+            utils::string_token_iterator expression_it(
+                    **it, (utils::kept_delimeters = "&;!",
+                            utils::dropped_delimeters = utils::dt_none));
+            // test_unit_id_list result;
             while (expression_it != utils::string_token_iterator())
             {
-                const_string expr = *expression_it;
-                expr.trim(" ");
-                if (expr.empty())
+                const_string expression = *expression_it;
+                expression.trim(" ");
+                if (expression.empty())
                 {
                     ++expression_it;
                     continue;
                 }
-                std::string debug(expr.begin(), expr.end());
-                if (expr[0] == ',')
+                std::string debug(expression.begin(), expression.end());
+                if (expression[0] == ';')
                 {
                     // this is just adding to the current result
                     appendToResult = true;
                     intersectResult = false;
+                    inverse = false;
                 }
-                else if (expr[0] == '&')
+                else if (expression[0] == '&')
                 {
                     intersectResult = true;
                     appendToResult = false;
+                    inverse = false;
+                }
+                else if (expression[0] == '!')
+                {
+                    inverse = true;
                 }
                 else
                 {
-                    partialResult.clear();
-                    add_filtered_test_units(master_tu_id, expr, partialResult);
-                    combine_expression_results(result, partialResult, appendToResult, intersectResult);
+                    test_unit_id_list subexpression_result;
+                    subexpression_result.clear();
+                    add_filtered_test_units(master_tu_id, expression, subexpression_result);
+                    if (inverse)
+                    {
+                        BOOST_TEST_SETUP_ASSERT(
+                                expression[0] == '@',
+                                "Inversion in expression is supported only for labels");
+                        subexpression_result = inverse_result(subexpression_result, all_tests);
+                        inverse = false;
+                    }
+                    combine_expression_results(result, subexpression_result, appendToResult,
+                                               intersectResult);
                 }
                 ++expression_it;
             }
-        } else {
+        }
+        else
+        {
             // this is sub-expression, so just grab the results
-            combine_expression_results(result, expressionResults[subExpressionResultIdx++],
-                    appendToResult, intersectResult);
+            combine_expression_results(result,
+                                       subexpressions_results[subExpressionResultIdx++],
+                                       appendToResult, intersectResult);
         }
     }
     // remove duplicates
@@ -516,12 +574,17 @@ process_expression_group(test_unit_id master_tu_id, /*or maybe string_view?*/con
 }
 
 static void
-process_expression_filter(test_unit_id master_tu_id, /*or maybe string_view?*/ const_string filter, test_unit_id_list& targ)
+process_expression_filter(test_unit_id master_tu_id,
+                          const_string filter,
+                          test_unit_id_list &targ)
 {
-    BOOST_TEST_SETUP_ASSERT(*(filter.end() - 1) == ')', "Missing closing bracket.");
-    std::size_t openingBracketCount = std::count(filter.begin(), filter.end(), '(');
-    std::size_t closingBracketCount = std::count(filter.begin(), filter.end(), ')');
-    BOOST_TEST_SETUP_ASSERT(openingBracketCount == closingBracketCount,
+    BOOST_TEST_SETUP_ASSERT(*(filter.end() - 1) == ')',
+                            "Missing closing bracket.");
+    std::size_t opening_bracket_count =
+            std::count(filter.begin(), filter.end(), '(');
+    std::size_t closing_bracket_count =
+            std::count(filter.begin(), filter.end(), ')');
+    BOOST_TEST_SETUP_ASSERT(opening_bracket_count == closing_bracket_count,
                             "Mismatch between '(' and ')' brackets.");
 
     // filter is valid group - it starts with '(' and ends with ')'
@@ -529,20 +592,25 @@ process_expression_filter(test_unit_id master_tu_id, /*or maybe string_view?*/ c
 }
 
 static void
-add_filtered_test_units( test_unit_id master_tu_id, const_string filter, test_unit_id_list& targ )
+add_filtered_test_units(test_unit_id master_tu_id,
+                                    const_string filter,
+                                    test_unit_id_list &targ)
 {
     // Choose between three kinds of filters
-    if( filter[0] == '@' ) {
-        filter.trim_left( 1 );
-        label_filter lf( targ, filter );
-        traverse_test_tree( master_tu_id, lf, true );
+    if (filter[0] == '@')
+    {
+        filter.trim_left(1);
+        label_filter lf(targ, filter);
+        traverse_test_tree(master_tu_id, lf, true);
     }
-    else if (filter[0] == '('){
+    else if (filter[0] == '(')
+    {
         process_expression_filter(master_tu_id, filter, targ);
     }
-    else {
-        name_filter nf( targ, filter );
-        traverse_test_tree( master_tu_id, nf, true );
+    else
+    {
+        name_filter nf(targ, filter);
+        traverse_test_tree(master_tu_id, nf, true);
     }
 }
 
